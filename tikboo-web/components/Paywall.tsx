@@ -1,38 +1,56 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ACCENT_HEX, Body, ChunkyButton, Display, cx } from "./ui";
+import { ACCENT_HEX, Body, ChunkyButton, Display } from "./ui";
+import type { AiAnalysis, ChatStats } from "@/lib/types";
 
 const BENEFITS: [string, string, string][] = [
   ["🧠", "The full AI read", "Vibe, roast, attachment style & score"],
-  ["🚩", "Every red flag, decoded", "Plus the green flags you missed"],
+  ["🚩", "Every red flag, decoded", "With the real receipts"],
   ["🔒", "Private & secure", "Analyzed for your eyes — never sold"],
-  ["🔖", "Unlimited chats", "Analyze every DM and group, anytime"],
+  ["🔖", "Unlimited chats", "Unlock every report, forever"],
 ];
 
-export function Paywall({ onClose, onUnlocked }: { onClose: () => void; onUnlocked: () => void }) {
-  const [exclusive, setExclusive] = useState(true);
-  const [plan, setPlan] = useState<"yearly" | "weekly">("yearly");
+const PRICE = process.env.NEXT_PUBLIC_UNLOCK_PRICE || "₹149";
+
+export function Paywall({
+  report, onClose,
+}: {
+  report: { stats: ChatStats; analysis: AiAnalysis; otherName: string };
+  onClose: () => void;
+}) {
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const plans = {
-    yearly: { title: "Yearly", price: exclusive ? "₹499 / year" : "₹999 / year", per: exclusive ? "≈ ₹9.6/wk" : "≈ ₹19/wk", badge: exclusive ? "80% OFF" : "BEST VALUE", trial: false },
-    weekly: { title: "Weekly", price: "₹199 / week", per: "3-day free trial", badge: "", trial: true },
-  } as const;
-  const sel = plans[plan];
-
-  const start = () => { setBusy(true); setTimeout(onUnlocked, 500); };
+  const unlock = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error || "Couldn't start checkout.");
+      // Stash so we can restore + unlock when the user returns from checkout.
+      localStorage.setItem("tikboo_pending_payment", data.paymentId);
+      localStorage.setItem("tikboo_resume", JSON.stringify(report));
+      window.location.href = data.url;
+    } catch (e: any) {
+      setErr(e?.message || "Something went wrong.");
+      setBusy(false);
+    }
+  };
 
   return (
-    <motion.div className="absolute inset-0 z-30 overflow-y-auto bg-ink" initial={{ y: "100%" }} animate={{ y: 0 }} transition={{ type: "spring", damping: 28 }}>
+    <motion.div className="absolute inset-0 z-30 overflow-y-auto bg-ink"
+      initial={{ y: "100%" }} animate={{ y: 0 }} transition={{ type: "spring", damping: 28 }}>
       <div className="mx-auto flex min-h-full w-full max-w-[480px] flex-col px-6 pb-6 pt-4">
-        <div className="flex items-center justify-between">
-          <button onClick={onClose} className="p-2 text-textMid">✕</button>
-          <button onClick={onUnlocked} className="p-2"><Body size={14} weight={700}>Restore</Body></button>
-        </div>
+        <button onClick={onClose} className="self-start p-2 text-textMid">✕</button>
         <Display size={22}>UNLOCK THE</Display>
         <Display size={38} color={ACCENT_HEX.lime}>FULL TEA 🍵</Display>
-        <div className="mt-5 space-y-3.5">
+
+        <div className="mt-6 space-y-3.5">
           {BENEFITS.map((b) => (
             <div key={b[1]} className="flex items-center gap-3.5">
               <span className="grid h-12 w-12 place-items-center rounded-2xl border border-stroke bg-inkCard text-[22px]">{b[0]}</span>
@@ -41,41 +59,18 @@ export function Paywall({ onClose, onUnlocked }: { onClose: () => void; onUnlock
           ))}
         </div>
 
-        <button onClick={() => setExclusive((v) => !v)} className="mt-5 flex items-center gap-2.5 rounded-2xl border px-4 py-2.5 text-left"
-          style={{ borderColor: exclusive ? ACCENT_HEX.lime : "#2A2A38", background: `linear-gradient(90deg, ${exclusive ? "#CBFF4D2E" : "#CBFF4D10"}, #1C1C26)` }}>
-          <span>🏷️</span><span className="flex-1"><Display size={14}>EXCLUSIVE OFFER</Display></span>
-          <span className={cx("h-6 w-11 rounded-full p-0.5 transition", exclusive ? "bg-lime" : "bg-inkSoft")}>
-            <span className={cx("block h-5 w-5 rounded-full bg-white transition", exclusive ? "translate-x-5" : "")} />
-          </span>
-        </button>
-
-        <div className="mt-3 space-y-3">
-          {(["yearly", "weekly"] as const).map((k) => {
-            const p = plans[k]; const on = plan === k;
-            return (
-              <button key={k} onClick={() => setPlan(k)} className="flex w-full items-center rounded-[20px] border-2 px-4 py-4 text-left transition"
-                style={on ? { borderColor: ACCENT_HEX.lime, background: "#CBFF4D1F" } : { borderColor: "#2A2A38", background: "#1C1C26" }}>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <Display size={18}>{p.title}</Display>
-                    {p.badge && <span className="rounded-lg bg-lime px-2 py-0.5"><Display size={10} color="#0B0B0F">{p.badge}</Display></span>}
-                  </div>
-                  <div className="mt-1"><Body size={14} weight={700} color="#F5F5F7">{p.price}</Body></div>
-                </div>
-                <Body size={13}>{p.per}</Body>
-                <span className="ml-2" style={{ color: on ? ACCENT_HEX.lime : "#6C6C7E" }}>{on ? "◉" : "○"}</span>
-              </button>
-            );
-          })}
+        <div className="mt-7 rounded-[22px] border-2 border-lime bg-lime/10 px-5 py-5 text-center">
+          <Display size={40} color={ACCENT_HEX.lime}>{PRICE}</Display>
+          <div className="mt-1"><Body size={14} weight={700} color="#F5F5F7">one-time · unlock forever</Body></div>
+          <div className="mt-1"><Body size={12}>no subscription, no auto-renew</Body></div>
         </div>
 
-        <div className="mt-5">
-          <div className="mb-2 text-center"><Body size={13}>🛡 Cancel anytime, no commitments</Body></div>
-          <ChunkyButton label={sel.trial ? "START FREE TRIAL" : "UNLOCK MY REPORT"} loading={busy} onClick={start} />
-          <div className="mt-3 px-2 text-center">
-            <Body size={10} color="#6C6C7E">
-              {sel.trial ? "No payment now. After the trial, " : "Your subscription "}auto-renews at the price shown unless cancelled at least 24h before it ends. Payment is charged to your account. Manage anytime in settings.
-            </Body>
+        {err && <div className="mt-3 text-center"><Body size={13} color={ACCENT_HEX.pink}>{err}</Body></div>}
+
+        <div className="mt-6">
+          <ChunkyButton label={busy ? "OPENING CHECKOUT…" : `UNLOCK FOR ${PRICE}`} loading={busy} onClick={unlock} />
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <Body size={11} color="#6C6C7E">🔒 Secure checkout by DodoPayments · UPI & cards</Body>
           </div>
         </div>
       </div>

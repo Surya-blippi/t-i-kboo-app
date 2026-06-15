@@ -65,8 +65,8 @@ export function Results({
 
       {showPaywall && (
         <Paywall
+          report={{ stats, analysis, otherName }}
           onClose={() => setShowPaywall(false)}
-          onUnlocked={() => { localStorage.setItem("tikboo_pro", "1"); setPro(true); setShowPaywall(false); setTimeout(() => go(1), 50); }}
         />
       )}
     </div>

@@ -27,6 +27,31 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const ctxRef = useRef<{ subject: Subject; relationship: string }>({ subject: "group", relationship: "Friend" });
 
+  // Returning from DodoPayments checkout — verify, unlock, and resume the report.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("dodo") !== "return") return;
+    const pid = localStorage.getItem("tikboo_pending_payment");
+    const cleanUrl = () => window.history.replaceState({}, "", "/");
+    if (!pid) { cleanUrl(); return; }
+    (async () => {
+      try {
+        const res = await fetch(`/api/verify?payment_id=${encodeURIComponent(pid)}`);
+        const data = await res.json();
+        if (data.paid) {
+          localStorage.setItem("tikboo_pro", "1");
+          localStorage.removeItem("tikboo_pending_payment");
+          const resume = localStorage.getItem("tikboo_resume");
+          if (resume) {
+            const r = JSON.parse(resume);
+            setStats(r.stats); setAnalysis(r.analysis); setOtherName(r.otherName);
+            setStage("results");
+          }
+        }
+      } catch { /* ignore */ } finally { cleanUrl(); }
+    })();
+  }, []);
+
   const handleFile = useCallback(async (file: File) => {
     setBusy(true); setError(null);
     try {
