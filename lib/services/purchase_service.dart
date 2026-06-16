@@ -1,37 +1,41 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// tikboo Pro gate, backed by RevenueCat.
+/// tikboo Pro gate, backed by RevenueCat (App Store + Google Play).
 ///
-/// CURRENT KEY IS A TEST STORE KEY (test_...): purchases are SIMULATED (a
-/// RevenueCat modal, no real StoreKit, no revenue). Great for testing the flow.
-///
-/// BEFORE APP STORE SUBMISSION you MUST swap to the production App Store key:
-///   1. In RevenueCat, add your App Store app (upload the App Store Connect
-///      In-App Purchase key + Issuer ID + shared secret).
-///   2. Copy the Apple public SDK key (starts with `appl_`).
-///   3. Replace [_revenueCatApiKey] below with that appl_ key, rebuild, upload.
-/// Apps submitted with a test_ key are rejected by App Review.
-///
-/// If the key is left as the placeholder, the app runs in LOCAL fallback mode
-/// (tapping unlock flips a local flag) so the UI still works without billing.
+/// KEYS: the public SDK key is platform-specific.
+///   - iOS  → Apple key (starts with `appl_`)
+///   - Android → Google key (starts with `goog_`) — get it from RevenueCat after
+///     adding your Google Play app + Play credentials, then replace [_googleKey].
+/// A key that isn't a real prefix runs in LOCAL fallback (UI works, no billing).
 class PurchaseService {
   PurchaseService._();
   static final instance = PurchaseService._();
 
-  static const String _revenueCatApiKey = 'appl_wnfRwVctWkwVWPeIkJQQaopGOJe';
+  static const String _appleKey = 'appl_wnfRwVctWkwVWPeIkJQQaopGOJe';
+  // TODO(android): replace with your RevenueCat Google Play key (goog_...).
+  static const String _googleKey = 'GOOGLE_PLAY_SDK_KEY';
+
+  static String get _revenueCatApiKey =>
+      Platform.isAndroid ? _googleKey : _appleKey;
+
   static const _kProLocal = 'tikboo_pro_unlocked';
 
   /// Short reassurance shown under unlock CTAs.
-  static const String trialHint = 'Cancel anytime in the App Store';
+  static const String trialHint = 'Cancel anytime in the store';
 
   bool _rcReady = false;
   Offering? _offering;
 
-  /// True only when no real key is set — the ONLY mode where a local unlock is
-  /// allowed (for UI testing). With a real key, unlock requires a real purchase.
-  bool get _placeholderKey => _revenueCatApiKey == 'REVENUECAT_PUBLIC_SDK_KEY';
+  /// True when the key isn't a real RevenueCat key — the ONLY mode where a local
+  /// unlock is allowed (UI testing). With a real key, unlock needs a purchase.
+  bool get _placeholderKey =>
+      !(_revenueCatApiKey.startsWith('appl_') ||
+          _revenueCatApiKey.startsWith('goog_') ||
+          _revenueCatApiKey.startsWith('test_'));
 
   /// True when RevenueCat is configured AND an offering with packages loaded.
   bool get storeReady => _rcReady && _offering != null;
