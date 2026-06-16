@@ -19,9 +19,9 @@ class PaywallScreen extends StatefulWidget {
 
 class _PaywallScreenState extends State<PaywallScreen> {
   final _purchases = PurchaseService.instance;
-  bool _exclusive = true;
   bool _busy = false;
-  late List<ProPlan> _plans;
+  bool _loading = true;
+  List<ProPlan> _plans = const [];
   String? _selectedId;
 
   static const _benefits = [
@@ -34,21 +34,30 @@ class _PaywallScreenState extends State<PaywallScreen> {
   @override
   void initState() {
     super.initState();
-    _rebuildPlans();
+    _load();
   }
 
-  void _rebuildPlans() {
-    _plans = _purchases.plans(exclusiveOffer: _exclusive);
-    _selectedId ??= _plans.first.id;
-    if (!_plans.any((p) => p.id == _selectedId)) {
-      _selectedId = _plans.first.id;
-    }
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final plans = await _purchases.plans();
+    if (!mounted) return;
+    setState(() {
+      _plans = plans;
+      _selectedId = plans.isNotEmpty ? plans.first.id : null;
+      _loading = false;
+    });
   }
 
   ProPlan get _selected =>
       _plans.firstWhere((p) => p.id == _selectedId, orElse: () => _plans.first);
 
   Future<void> _start() async {
+    // With real billing, a plan must have a live store package.
+    if (_purchases.usingRealBilling && !_purchases.storeReady) {
+      _toast('Couldn’t reach the App Store. Sign into a Sandbox account and retry.');
+      _load();
+      return;
+    }
     setState(() => _busy = true);
     HapticFeedback.mediumImpact();
     final ok = await _purchases.purchase(_selected);
@@ -57,7 +66,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
     if (ok) {
       Navigator.of(context).pop(true);
     } else {
-      _toast('Purchase didn’t go through. Try again.');
+      _toast('Purchase didn’t go through or was cancelled.');
     }
   }
 
@@ -84,7 +93,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final trial = _selected.trial;
     return Scaffold(
       body: BlobBackground(
         colors: const [AppColors.lime, AppColors.violet, AppColors.pink],
@@ -121,9 +129,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     const SizedBox(height: 24),
                     ..._benefits.map(_benefitRow),
                     const SizedBox(height: 20),
-                    _exclusiveToggle(),
-                    const SizedBox(height: 12),
-                    ..._plans.map(_planCard),
+                    if (_loading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                            child: CircularProgressIndicator(
+                                color: AppColors.lime)),
+                      )
+                    else
+                      ..._plans.map(_planCard),
                   ],
                 ),
               ),
@@ -143,22 +157,18 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     ),
                     const SizedBox(height: 12),
                     ChunkyButton(
-                      label: trial != null
-                          ? 'START FREE TRIAL'
-                          : 'UNLOCK MY REPORT',
+                      label: 'UNLOCK MY REPORT',
                       icon: Icons.bolt_rounded,
                       loading: _busy,
                       onTap: _start,
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      trial != null
-                          ? '$trial, then ${_selected.priceLabel}'
-                          : _selected.priceLabel,
+                      _plans.isEmpty ? '' : _selected.priceLabel,
                       style: AppTheme.body(12, color: AppColors.textLow),
                     ),
                     const SizedBox(height: 10),
-                    _legalBlock(trial != null),
+                    _legalBlock(),
                   ],
                 ),
               ),
@@ -175,13 +185,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
     ));
   }
 
-  Widget _legalBlock(bool hasTrial) {
+  Widget _legalBlock() {
     return Column(
       children: [
         Text(
-          hasTrial
-              ? 'No payment now. After the free trial, your subscription auto-renews at the price shown unless cancelled at least 24h before it ends. Payment is charged to your Apple ID. Manage or cancel anytime in App Store settings.'
-              : 'Your subscription auto-renews at the price shown unless cancelled at least 24h before the period ends. Payment is charged to your Apple ID. Manage or cancel anytime in App Store settings.',
+          'Your subscription auto-renews at the price shown unless cancelled at least 24h before the period ends. Payment is charged to your Apple ID. Manage or cancel anytime in App Store settings.',
           textAlign: TextAlign.center,
           style: AppTheme.body(10, color: AppColors.textLow, height: 1.4),
         ),
@@ -254,46 +262,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 Text(b.$3, style: AppTheme.body(13, color: AppColors.textMid)),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _exclusiveToggle() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [
-          AppColors.lime.withOpacity(_exclusive ? 0.18 : 0.06),
-          AppColors.inkCard,
-        ]),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: _exclusive ? AppColors.lime : AppColors.stroke),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.local_offer_rounded,
-              color: AppColors.lime, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text('EXCLUSIVE OFFER',
-                style: AppTheme.display(14, color: AppColors.textHi)),
-          ),
-          Switch(
-            value: _exclusive,
-            activeColor: AppColors.ink,
-            activeTrackColor: AppColors.lime,
-            inactiveThumbColor: AppColors.textMid,
-            inactiveTrackColor: AppColors.inkSoft,
-            onChanged: (v) {
-              HapticFeedback.selectionClick();
-              setState(() {
-                _exclusive = v;
-                _rebuildPlans();
-              });
-            },
           ),
         ],
       ),

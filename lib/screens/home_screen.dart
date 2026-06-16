@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../dev/screenshot_demo.dart';
 import '../services/chat_parser.dart';
 import '../services/ios_share_channel.dart';
 import '../services/stats_engine.dart';
+import 'results_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/blob_background.dart';
@@ -33,6 +35,20 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initShareListening();
+    if (ScreenshotDemo.enabled) {
+      Future.delayed(const Duration(milliseconds: 2600), () {
+        if (!mounted) return;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ResultsScreen(
+            stats: ScreenshotDemo.stats(),
+            analysis: ScreenshotDemo.analysis,
+            otherName: ScreenshotDemo.otherName,
+            forcePro: true,
+            autoAdvance: true,
+          ),
+        ));
+      });
+    }
   }
 
   @override
@@ -241,16 +257,8 @@ class _Logo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.lime,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.chat_bubble_rounded,
-              color: AppColors.ink, size: 18),
-        ),
-        const SizedBox(width: 10),
+        Image.asset('assets/brand/logo.png', width: 38, height: 38),
+        const SizedBox(width: 8),
         Text('tikboo', style: AppTheme.display(22, weight: FontWeight.w800)),
       ],
     );

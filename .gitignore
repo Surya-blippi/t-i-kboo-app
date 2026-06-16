@@ -52,3 +52,8 @@ tikboo-web/out/
 **/.env.local
 ios/Pods/
 macos/Pods/
+
+# Android signing secrets — NEVER commit
+android/key.properties
+android/upload-keystore.jks
+**/*.jks

@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for the AI request (OpenRouter). Release builds don't get this
+         automatically the way debug builds do, so declare it explicitly. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="tikboo"
         android:name="${applicationName}"
@@ -58,6 +61,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Allow url_launcher to open WhatsApp (Android 11+ package visibility). -->
+        <package android:name="com.whatsapp" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
         </intent>
     </queries>
 </manifest>

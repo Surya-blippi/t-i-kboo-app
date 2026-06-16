@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -13,11 +15,15 @@ class ResultsScreen extends StatefulWidget {
   final ChatStats stats;
   final AiAnalysis analysis;
   final String otherName;
+  final bool forcePro; // screenshot/demo only
+  final bool autoAdvance; // screenshot/demo only
   const ResultsScreen(
       {super.key,
       required this.stats,
       required this.analysis,
-      this.otherName = ''});
+      this.otherName = '',
+      this.forcePro = false,
+      this.autoAdvance = false});
 
   @override
   State<ResultsScreen> createState() => _ResultsScreenState();
@@ -32,8 +38,18 @@ class _ResultsScreenState extends State<ResultsScreen> {
   @override
   void initState() {
     super.initState();
+    _pro = widget.forcePro;
     _rebuild();
-    _loadPro();
+    if (!widget.forcePro) _loadPro();
+    if (widget.autoAdvance) {
+      Timer.periodic(const Duration(milliseconds: 2000), (t) {
+        if (!mounted) { t.cancel(); return; }
+        if (_index >= _cards.length - 1) { t.cancel(); return; }
+        _controller.nextPage(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOut);
+      });
+    }
   }
 
   Future<void> _loadPro() async {

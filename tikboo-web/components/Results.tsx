@@ -368,7 +368,13 @@ const ShareCard = forwardRef<HTMLDivElement, { stats: ChatStats; analysis: AiAna
         <div className="blob" style={{ top: -60, left: -40, width: 240, height: 240, background: "radial-gradient(circle,#8B5CFF99,transparent 70%)" }} />
         <div className="blob" style={{ bottom: -40, right: -50, width: 260, height: 260, background: "radial-gradient(circle,#FF4D9D99,transparent 70%)" }} />
         <div className="relative flex h-full flex-col p-7">
-          <div className="flex items-center"><Display size={16}>🟩 tikboo</Display><span className="flex-1" /><Display size={12} color="#AFAFC0">WRAPPED</Display></div>
+          <div className="flex items-center gap-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="" width={24} height={24} />
+            <Display size={16}>tikboo</Display>
+            <span className="flex-1" />
+            <Display size={12} color="#AFAFC0">WRAPPED</Display>
+          </div>
           <div className="flex-1 flex flex-col justify-center">
             <div className="text-[64px] leading-none">{analysis.vibeEmoji || "🍵"}</div>
             <div className="mt-2"><Display size={30} color={ACCENT_HEX.lime} style={{ lineHeight: 1.05 }}>{analysis.vibeTitle || "Certified Chat"}</Display></div>

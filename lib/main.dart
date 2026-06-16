@@ -4,14 +4,16 @@ import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'services/purchase_service.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  await PurchaseService.instance.init();
+  // Start the app immediately; billing initializes in the background so a
+  // billing hiccup can never block or crash launch.
   runApp(const TikbooApp());
+  PurchaseService.instance.init();
 }
 
 class TikbooApp extends StatelessWidget {

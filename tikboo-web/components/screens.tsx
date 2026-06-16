@@ -33,14 +33,23 @@ export function Home({
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.currentTarget.value = ""; }} />
       <ChunkyButton label={busy ? "READING…" : "UPLOAD CHAT"} loading={busy} onClick={() => input.current?.click()} />
       <div className="mt-3 text-center"><Body size={12} color="#6C6C7E">🔒 analyzed securely · never stored or sold</Body></div>
+      <div className="mt-2 flex items-center justify-center gap-3">
+        <a href={PRIVACY_URL} target="_blank" rel="noreferrer"><Body size={11} color="#6C6C7E">Privacy</Body></a>
+        <Body size={11} color="#6C6C7E">·</Body>
+        <a href={TERMS_URL} target="_blank" rel="noreferrer"><Body size={11} color="#6C6C7E">Terms</Body></a>
+      </div>
     </Screen>
   );
 }
 
+const PRIVACY_URL = "https://docs.google.com/document/d/12Qlw2GmBxqCSCbZWH71X182lVXmnjsKRzRl16fIFBOo/edit?usp=sharing";
+const TERMS_URL = "https://docs.google.com/document/d/1t5W0B_vZDCrd9rPleMNrVTr-jZg7PB0qyHswvzT_T9k/edit?usp=sharing";
+
 function Logo() {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="rounded-xl bg-lime p-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="#0B0B0F"><path d="M20 2H4a2 2 0 00-2 2v18l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2z"/></svg></div>
+    <div className="flex items-center gap-2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo.png" alt="tikboo" width={38} height={38} />
       <Display size={22}>tikboo</Display>
     </div>
   );
