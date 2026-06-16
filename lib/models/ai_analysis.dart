@@ -44,6 +44,31 @@ class AiAnalysis {
         'vibe_score': vibeScore,
       };
 
+  /// Parse the camelCase shape returned by the tikboo web backend (/api/analyze).
+  factory AiAnalysis.fromApi(Map<String, dynamic> j) {
+    List<FlagItem> flags(dynamic v) =>
+        (v as List?)?.map((e) => FlagItem.fromAny(e)).toList() ?? const [];
+    return AiAnalysis(
+      vibeTitle: (j['vibeTitle'] ?? 'Certified Chat').toString(),
+      vibeEmoji: (j['vibeEmoji'] ?? '✨').toString(),
+      summary: (j['summary'] ?? '').toString(),
+      roast: (j['roast'] ?? '').toString(),
+      energyMatch: (j['energyMatch'] ?? '').toString(),
+      whoTextsFirst: (j['whoTextsFirst'] ?? '').toString(),
+      attachmentStyle: (j['attachmentStyle'] ?? '').toString(),
+      firstTextRead: (j['firstTextRead'] ?? '').toString(),
+      greenFlags: flags(j['greenFlags']),
+      redFlags: flags(j['redFlags']),
+      vibeScore: (j['vibeScore'] is num)
+          ? (j['vibeScore'] as num).clamp(0, 100).toInt()
+          : 72,
+      superlatives: (j['superlatives'] as List?)
+              ?.map((e) => AiSuperlative.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+  }
+
   factory AiAnalysis.fromJson(Map<String, dynamic> j) {
     List<FlagItem> flags(dynamic v) =>
         (v as List?)?.map((e) => FlagItem.fromAny(e)).toList() ?? const [];

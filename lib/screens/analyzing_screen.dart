@@ -4,15 +4,13 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../models/ai_analysis.dart';
 import '../models/chat_context.dart';
 import '../models/chat_stats.dart';
+import '../services/ai_service.dart';
 import '../services/history_service.dart';
-import '../services/openrouter_service.dart';
-import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/blob_background.dart';
 import '../widgets/chunky_button.dart';
 import 'results_screen.dart';
-import 'settings_screen.dart';
 
 class AnalyzingScreen extends StatefulWidget {
   final ChatStats stats;
@@ -25,9 +23,7 @@ class AnalyzingScreen extends StatefulWidget {
 }
 
 class _AnalyzingScreenState extends State<AnalyzingScreen> {
-  final _settings = SettingsService();
   String? _error;
-  bool _needsKey = false;
 
   Timer? _stepTimer;
   int _activeStep = 0;
@@ -73,21 +69,11 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
   }
 
   Future<void> _run() async {
-    setState(() {
-      _error = null;
-      _needsKey = false;
-    });
-    final key = await _settings.getApiKey();
-    if (key == null) {
-      setState(() => _needsKey = true);
-      return;
-    }
+    setState(() => _error = null);
     _startChecklist();
-    final model = await _settings.getModel();
     try {
-      final service = OpenRouterService(apiKey: key, model: model);
       final analysis =
-          await service.analyze(widget.stats, context: widget.context);
+          await AiService().analyze(widget.stats, context: widget.context);
       _result = analysis;
       _aiDone = true;
       // Persist to local history so it can be revisited later.
@@ -115,29 +101,6 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
     );
   }
 
-  void _skipAi() {
-    const fallback = AiAnalysis(
-      vibeTitle: 'Stats Mode',
-      vibeEmoji: '📊',
-      summary: 'AI skipped — here are your on-device receipts.',
-      roast: '',
-      greenFlags: [],
-      redFlags: [],
-      energyMatch: '',
-      whoTextsFirst: '',
-      attachmentStyle: '',
-      firstTextRead: '',
-      superlatives: [],
-      vibeScore: 0,
-    );
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) =>
-            ResultsScreen(stats: widget.stats, analysis: fallback),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -146,11 +109,9 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: _needsKey
-                ? Center(child: _keyPrompt())
-                : _error != null
-                    ? Center(child: _errorView())
-                    : _checklistView(),
+            child: _error != null
+                ? Center(child: _errorView())
+                : _checklistView(),
           ),
         ),
       ),
@@ -304,43 +265,6 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
     );
   }
 
-  Widget _keyPrompt() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('🔑', style: AppTheme.display(56)),
-        const SizedBox(height: 16),
-        Text('ONE TINY STEP', style: AppTheme.display(28)),
-        const SizedBox(height: 10),
-        Text(
-          'Add a free OpenRouter API key to unlock the AI vibe check. Takes 30 seconds — the models themselves are free.',
-          style: AppTheme.body(15, color: AppColors.textMid, height: 1.5),
-        ),
-        const SizedBox(height: 24),
-        ChunkyButton(
-          label: 'ADD API KEY',
-          icon: Icons.key_rounded,
-          onTap: () async {
-            final saved = await Navigator.of(context).push<bool>(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            );
-            if (saved == true) _run();
-          },
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: TextButton(
-            onPressed: _skipAi,
-            child: Text('skip — just show me the stats',
-                style: AppTheme.body(14,
-                    color: AppColors.textMid, weight: FontWeight.w700)),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _errorView() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -355,15 +279,6 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
         const SizedBox(height: 24),
         ChunkyButton(
             label: 'TRY AGAIN', icon: Icons.refresh_rounded, onTap: _run),
-        const SizedBox(height: 12),
-        Center(
-          child: TextButton(
-            onPressed: _skipAi,
-            child: Text('show stats without AI',
-                style: AppTheme.body(14,
-                    color: AppColors.textMid, weight: FontWeight.w700)),
-          ),
-        ),
       ],
     );
   }
