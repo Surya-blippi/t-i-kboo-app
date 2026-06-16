@@ -175,16 +175,8 @@ class ShareableWrappedCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppColors.lime,
-                        borderRadius: BorderRadius.circular(9),
-                      ),
-                      child: const Icon(Icons.chat_bubble_rounded,
-                          color: AppColors.ink, size: 13),
-                    ),
-                    const SizedBox(width: 8),
+                    Image.asset('assets/brand/logo.png', width: 26, height: 26),
+                    const SizedBox(width: 6),
                     Text('tikboo', style: AppTheme.display(16)),
                     const Spacer(),
                     Text('WRAPPED',
