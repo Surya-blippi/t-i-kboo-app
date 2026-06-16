@@ -6,9 +6,13 @@ import { buildDigest, computeStats } from "@/lib/stats";
 import type { AiAnalysis, ChatStats, Subject } from "@/lib/types";
 import { Home, ContextStep, Analyzing, Screen } from "@/components/screens";
 import { Results } from "@/components/Results";
-import { Body, ChunkyButton, Display } from "@/components/ui";
+import { Body, ChunkyButton, Display, ACCENT_HEX } from "@/components/ui";
+import { Credits } from "@/lib/credits";
 
-type Stage = "home" | "context" | "analyzing" | "results" | "history";
+type Stage = "home" | "context" | "analyzing" | "results" | "history" | "settings";
+
+const PRIVACY_URL = "/privacy";
+const TERMS_URL = "/terms";
 
 const subjectLabel = (s: Subject) => (s === "girl" ? "a girl" : s === "guy" ? "a guy" : "a group");
 
@@ -25,9 +29,10 @@ export default function Page() {
   const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportId, setReportId] = useState("");
   const ctxRef = useRef<{ subject: Subject; relationship: string }>({ subject: "group", relationship: "Friend" });
 
-  // Returning from DodoPayments checkout — verify, unlock, and resume the report.
+  // Returning from DodoPayments checkout — verify, top up credits, resume report.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("dodo") !== "return") return;
@@ -39,13 +44,20 @@ export default function Page() {
         const res = await fetch(`/api/verify?payment_id=${encodeURIComponent(pid)}`);
         const data = await res.json();
         if (data.paid) {
-          localStorage.setItem("tikboo_pro", "1");
+          const credits = parseInt(localStorage.getItem("tikboo_pending_credits") || "0", 10);
+          if (credits > 0) Credits.add(credits);
           localStorage.removeItem("tikboo_pending_payment");
+          localStorage.removeItem("tikboo_pending_credits");
           const resume = localStorage.getItem("tikboo_resume");
+          localStorage.removeItem("tikboo_resume");
           if (resume) {
             const r = JSON.parse(resume);
-            setStats(r.stats); setAnalysis(r.analysis); setOtherName(r.otherName);
+            Credits.unlock(r.reportId); // spend one credit to open this report
+            setStats(r.stats); setAnalysis(r.analysis);
+            setOtherName(r.otherName); setReportId(r.reportId);
             setStage("results");
+          } else {
+            setStage("settings"); // bought from Settings — show the new balance
           }
         }
       } catch { /* ignore */ } finally { cleanUrl(); }
@@ -103,10 +115,10 @@ export default function Page() {
     runAnalysis(stats, subject, relationship, otherName);
   };
 
-  const saveHistory = (s: ChatStats, a: AiAnalysis, other: string, relationship: string) => {
+  const saveHistory = (id: string, s: ChatStats, a: AiAnalysis, other: string, relationship: string) => {
     try {
       const entry: HistoryEntry = {
-        id: `${Date.now()}`, savedAt: Date.now(),
+        id, savedAt: Date.now(),
         title: s.isGroup ? "Group chat" : other || s.people[0]?.name || "Chat",
         vibeEmoji: a.vibeEmoji, vibeTitle: a.vibeTitle, vibeScore: a.vibeScore,
         relationship, otherName: other, stats: s, analysis: a,
@@ -118,7 +130,9 @@ export default function Page() {
   };
 
   const onComplete = () => {
-    if (stats && analysis) saveHistory(stats, analysis, otherName, ctxRef.current.relationship);
+    const id = `${Date.now()}`;
+    setReportId(id);
+    if (stats && analysis) saveHistory(id, stats, analysis, otherName, ctxRef.current.relationship);
     setStage("results");
   };
 
@@ -126,17 +140,81 @@ export default function Page() {
     setStage("home"); setStats(null); setAnalysis(null); setOtherName(""); setReady(false); setError(null);
   };
 
-  if (stage === "home") return <Home onFile={handleFile} onOpenHistory={() => setStage("history")} busy={busy} />;
+  if (stage === "home") return <Home onFile={handleFile} onOpenHistory={() => setStage("history")} onOpenSettings={() => setStage("settings")} busy={busy} />;
   if (stage === "context" && stats)
     return <ContextStep stats={stats} otherName={otherName} onBack={restart} onDone={onContextDone} />;
   if (stage === "analyzing")
     return <Analyzing ready={ready} error={error} subjectInitial={(otherName || "✨")[0]?.toUpperCase() || "✨"}
       onComplete={onComplete} onRetry={() => runAnalysis(stats!, ctxRef.current.subject, ctxRef.current.relationship, otherName)} />;
   if (stage === "results" && stats && analysis)
-    return <Results stats={stats} analysis={analysis} otherName={otherName} onRestart={restart} />;
+    return <Results stats={stats} analysis={analysis} otherName={otherName} reportId={reportId} onRestart={restart} />;
   if (stage === "history")
-    return <HistoryView onBack={restart} onOpen={(e) => { setStats(e.stats); setAnalysis(e.analysis); setOtherName(e.otherName); setStage("results"); }} />;
-  return <Home onFile={handleFile} onOpenHistory={() => setStage("history")} busy={busy} />;
+    return <HistoryView onBack={restart} onOpen={(e) => { setStats(e.stats); setAnalysis(e.analysis); setOtherName(e.otherName); setReportId(e.id); setStage("results"); }} />;
+  if (stage === "settings")
+    return <SettingsView onBack={restart} />;
+  return <Home onFile={handleFile} onOpenHistory={() => setStage("history")} onOpenSettings={() => setStage("settings")} busy={busy} />;
+}
+
+function SettingsView({ onBack }: { onBack: () => void }) {
+  const [credits, setCredits] = useState(0);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => { setCredits(Credits.get()); }, []);
+
+  const buy = async (pack: "single" | "pack") => {
+    setBusy(pack);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error || "Checkout failed");
+      localStorage.setItem("tikboo_pending_payment", data.paymentId);
+      localStorage.setItem("tikboo_pending_credits", String(data.credits));
+      localStorage.removeItem("tikboo_resume"); // buying from settings, no report to resume
+      window.location.href = data.url;
+    } catch (e: any) {
+      alert(e?.message || "Something went wrong");
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Screen colors={["cyan", "violet", "lime"]}>
+      <button onClick={onBack} className="self-start p-2 text-textHi text-lg">←</button>
+      <div className="mt-1"><Display size={24}>SETTINGS</Display></div>
+
+      <div className="mt-6 rounded-[22px] border-2 border-lime bg-lime/10 p-5 text-center">
+        <Display size={44} color={ACCENT_HEX.lime}>{credits}</Display>
+        <div className="mt-1"><Body size={14} weight={700} color="#F5F5F7">{credits === 1 ? "report credit" : "report credits"}</Body></div>
+        <div className="mt-1"><Body size={12}>1 credit unlocks 1 full report</Body></div>
+      </div>
+
+      <div className="mt-6"><Display size={15} color={ACCENT_HEX.pink}>BUY CREDITS</Display></div>
+      <div className="mt-3 space-y-3">
+        <button onClick={() => buy("pack")} disabled={!!busy}
+          className="flex w-full items-center rounded-[20px] border border-stroke bg-inkCard px-5 py-4 text-left active:scale-[0.99]">
+          <div className="flex-1">
+            <div className="flex items-center gap-2"><Display size={17}>10 reports</Display><span className="rounded-lg bg-lime px-2 py-0.5"><Display size={10} color="#0B0B0F">BEST VALUE</Display></span></div>
+            <div className="mt-1"><Body size={13}>just $0.40 each</Body></div>
+          </div>
+          <Display size={20} color={ACCENT_HEX.lime}>{busy === "pack" ? "…" : "$4"}</Display>
+        </button>
+        <button onClick={() => buy("single")} disabled={!!busy}
+          className="flex w-full items-center rounded-[20px] border border-stroke bg-inkCard px-5 py-4 text-left active:scale-[0.99]">
+          <div className="flex-1"><Display size={17}>1 report</Display><div className="mt-1"><Body size={13}>unlock a single report</Body></div></div>
+          <Display size={20} color={ACCENT_HEX.lime}>{busy === "single" ? "…" : "$1"}</Display>
+        </button>
+      </div>
+
+      <div className="mt-7 flex items-center gap-3">
+        <a href={PRIVACY_URL} target="_blank" rel="noreferrer"><Body size={12} color="#AFAFC0">Privacy</Body></a>
+        <Body size={12} color="#6C6C7E">·</Body>
+        <a href={TERMS_URL} target="_blank" rel="noreferrer"><Body size={12} color="#AFAFC0">Terms</Body></a>
+      </div>
+      <div className="mt-2"><Body size={11} color="#6C6C7E">Credits are stored on this device. Secure checkout by DodoPayments.</Body></div>
+    </Screen>
+  );
 }
 
 function HistoryView({ onBack, onOpen }: { onBack: () => void; onOpen: (e: HistoryEntry) => void }) {

@@ -6,13 +6,16 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const apiKey = process.env.DODO_API_KEY;
   const base = process.env.DODO_BASE_URL || "https://test.dodopayments.com";
-  const productId = process.env.DODO_PRODUCT_ID;
+  const { pack, email } = await req.json().catch(() => ({ pack: "single" }));
+  // pack: "single" → 1 credit, "pack" → 10 credits
+  const productId =
+    pack === "pack" ? process.env.DODO_PRODUCT_PACK : process.env.DODO_PRODUCT_SINGLE;
+  const credits = pack === "pack" ? 10 : 1;
   if (!apiKey || !productId) {
     return NextResponse.json({ error: "Payments not configured." }, { status: 500 });
   }
 
   const origin = req.headers.get("origin") || new URL(req.url).origin;
-  const { email } = await req.json().catch(() => ({ email: undefined }));
 
   try {
     const res = await fetch(`${base}/payments`, {
@@ -27,7 +30,7 @@ export async function POST(req: NextRequest) {
         customer: { email: email || "guest@tikboo.app", name: "tikboo user" },
         billing: { country: "IN", city: "NA", state: "NA", street: "NA", zipcode: "000000" },
         return_url: `${origin}/?dodo=return`,
-        metadata: { kind: "unlock" },
+        metadata: { kind: "credits", credits: String(credits) },
       }),
     });
     const data = await res.json();
@@ -37,7 +40,7 @@ export async function POST(req: NextRequest) {
         { status: 502 }
       );
     }
-    return NextResponse.json({ url: data.payment_link, paymentId: data.payment_id });
+    return NextResponse.json({ url: data.payment_link, paymentId: data.payment_id, credits });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Checkout failed." }, { status: 502 });
   }

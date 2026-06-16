@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "openai/gpt-oss-120b:free";
+const DEFAULT_MODEL = "gemini-2.5-flash-lite";
 
 const SYSTEM = `You are tikboo — a witty genz best friend who reads group chats and DMs for the vibe.
 You get a JSON digest of chat statistics PLUS "message_samples" (a sample of real lines as "Sender: text"). Read between the numbers AND quote the receipts.
@@ -25,10 +24,10 @@ Return STRICT JSON only, no markdown, matching this exact shape:
   "green_flags": [{"flag":"short positive observation","quote":"a REAL message from message_samples, copied exactly","sender":"who said it"}],
   "red_flags": [{"flag":"short cheeky red flag (light)","quote":"a REAL message from message_samples, copied exactly","sender":"who said it"}],
   "superlatives": [{"emoji":"🏆","title":"award name","person":"name","reason":"why, short"}],
-  "vibe_score": 0-100
+  "vibe_score": 0
 }
 CRITICAL: Both green AND red flags must be about "person_being_analyzed" ONLY — every flag's "sender" MUST be person_being_analyzed and every "quote" a message THEY sent. Never flag or quote "you_the_app_user".
-Give 3 green flags and 2-3 red flags, each with a verbatim quote from message_samples (under ~120 chars) or "" if none fits. Give 3-4 superlatives. Keep strings tight and screenshot-able.`;
+Give 3 green flags and 2-3 red flags, each with a verbatim quote from message_samples (under ~120 chars) or "" if none fits. Give 3-4 superlatives. vibe_score is 0-100. Keep strings tight and screenshot-able.`;
 
 function extractJson(raw: string): any {
   let s = raw.trim();
@@ -56,51 +55,57 @@ function dropUserFlags(arr: any[], you?: string) {
   return kept.length ? kept : arr;
 }
 
+const SAFETY = [
+  "HARM_CATEGORY_HARASSMENT",
+  "HARM_CATEGORY_HATE_SPEECH",
+  "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+  "HARM_CATEGORY_DANGEROUS_CONTENT",
+].map((category) => ({ category, threshold: "BLOCK_ONLY_HIGH" }));
+
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "Server is missing OPENROUTER_API_KEY." }, { status: 500 });
+    return NextResponse.json({ error: "Server is missing GEMINI_API_KEY." }, { status: 500 });
   }
-  const { digest, model, you } = await req.json();
-  const payload = JSON.stringify({
-    model: model || process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
-    temperature: 0.9,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM },
-      { role: "user", content: `Analyze and return JSON.\n\n${JSON.stringify(digest, null, 2)}` },
+  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  const { digest, you } = await req.json();
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: SYSTEM }] },
+    contents: [
+      { role: "user", parts: [{ text: `Analyze and return JSON.\n\n${JSON.stringify(digest, null, 2)}` }] },
     ],
+    generationConfig: { temperature: 0.9, responseMimeType: "application/json" },
+    safetySettings: SAFETY,
   });
 
   let lastErr = "Could not get a clean read.";
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
-      const res = await fetch(ENDPOINT, {
+      const res = await fetch(url, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://tikboo.app",
-          "X-Title": "tikboo",
-        },
-        body: payload,
+        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+        body,
       });
-      if (res.status === 429) {
-        lastErr = "Rate limited — free models are popular. Try again.";
-        await new Promise((r) => setTimeout(r, 1200 * attempt));
+      if (res.status === 429 || res.status === 503) {
+        lastErr = "AI is busy — try again in a moment.";
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
         continue;
       }
       if (!res.ok) {
-        const code = res.status;
-        const msg =
-          code === 401 ? "AI key rejected."
-          : code === 402 ? "This model needs credits — pick a free one."
-          : `OpenRouter error (${code}).`;
-        return NextResponse.json({ error: msg }, { status: 502 });
+        const t = await res.text();
+        return NextResponse.json(
+          { error: `AI error (${res.status}). ${t.slice(0, 120)}` },
+          { status: 502 }
+        );
       }
-      const body = await res.json();
-      const content = body?.choices?.[0]?.message?.content;
-      if (!content) { lastErr = "Empty response."; continue; }
+      const data = await res.json();
+      const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!content) {
+        lastErr = "Empty response.";
+        continue;
+      }
       const parsed = extractJson(content);
       parsed.red_flags = dropUserFlags(flagList(parsed.red_flags), you);
       parsed.green_flags = dropUserFlags(flagList(parsed.green_flags), you);

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { toPng } from "html-to-image";
 import { ACCENT_HEX, Body, ChunkyButton, Display, cx, onAccentText } from "./ui";
 import { Paywall } from "./Paywall";
+import { Credits } from "@/lib/credits";
 import type { AiAnalysis, ChatStats, FlagItem } from "@/lib/types";
 
 const compact = (n: number) =>
@@ -21,18 +22,29 @@ function CardShell({ accent, children }: { accent: string; children: React.React
 }
 
 export function Results({
-  stats, analysis, otherName, onRestart,
-}: { stats: ChatStats; analysis: AiAnalysis; otherName: string; onRestart: () => void }) {
-  const [pro, setPro] = useState(false);
+  stats, analysis, otherName, reportId, onRestart,
+}: { stats: ChatStats; analysis: AiAnalysis; otherName: string; reportId: string; onRestart: () => void }) {
+  const [unlocked, setUnlocked] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [index, setIndex] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setPro(localStorage.getItem("tikboo_pro") === "1"); }, []);
+  useEffect(() => { setUnlocked(Credits.isUnlocked(reportId)); }, [reportId]);
+
+  // Locked-card CTA: spend a credit if available, else open the paywall.
+  const handleUnlock = () => {
+    if (Credits.get() > 0) {
+      Credits.unlock(reportId);
+      setUnlocked(true);
+    } else {
+      setShowPaywall(true);
+    }
+  };
 
   const cards = useMemo(
-    () => buildCards(stats, analysis, otherName, pro, () => setShowPaywall(true), onRestart),
-    [stats, analysis, otherName, pro, onRestart]
+    () => buildCards(stats, analysis, otherName, unlocked, handleUnlock, onRestart),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stats, analysis, otherName, unlocked, onRestart]
   );
 
   const go = (dir: 1 | -1) => {
@@ -51,9 +63,9 @@ export function Results({
         {cards.map((c, i) => (<div key={i} className="h-full w-full shrink-0 snap-center">{c}</div>))}
       </div>
 
-      {/* tap zones */}
-      <button aria-label="prev" className="absolute left-0 top-16 bottom-0 w-[35%]" onClick={() => go(-1)} />
-      <button aria-label="next" className="absolute right-0 top-16 bottom-0 w-[55%]" onClick={() => go(1)} />
+      {/* tap zones — stop ~180px above the bottom so they never cover the CTAs */}
+      <button aria-label="prev" className="absolute left-0 top-16 w-[30%]" style={{ bottom: 180 }} onClick={() => go(-1)} />
+      <button aria-label="next" className="absolute right-0 top-16 w-[45%]" style={{ bottom: 180 }} onClick={() => go(1)} />
 
       {/* progress */}
       <div className="pointer-events-none absolute left-0 right-0 top-3 flex gap-1.5 px-4">
@@ -65,7 +77,7 @@ export function Results({
 
       {showPaywall && (
         <Paywall
-          report={{ stats, analysis, otherName }}
+          report={{ stats, analysis, otherName, reportId }}
           onClose={() => setShowPaywall(false)}
         />
       )}
