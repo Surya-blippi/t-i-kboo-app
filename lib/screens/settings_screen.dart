@@ -16,6 +16,21 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _restoring = false;
+  bool _demoSkip = false;
+
+  @override
+  void initState() {
+    super.initState();
+    PurchaseService.instance.demoSkipEnabled().then((v) {
+      if (mounted) setState(() => _demoSkip = v);
+    });
+  }
+
+  Future<void> _toggleDemoSkip(bool v) async {
+    HapticFeedback.selectionClick();
+    setState(() => _demoSkip = v);
+    await PurchaseService.instance.setDemoSkip(v);
+  }
 
   Future<void> _restore() async {
     setState(() => _restoring = true);
@@ -72,6 +87,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: AppColors.lime))
                     : null,
+              ),
+              const SizedBox(height: 28),
+              Text('DEMO', style: AppTheme.display(15, color: AppColors.tangerine)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.inkCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: _demoSkip ? AppColors.tangerine : AppColors.stroke),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_open_rounded,
+                        color: AppColors.textMid, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Skip paywall',
+                              style: AppTheme.display(15,
+                                  color: AppColors.textHi,
+                                  weight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text('Unlock reports free (for demo recordings)',
+                              style: AppTheme.body(12, color: AppColors.textMid)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _demoSkip,
+                      activeColor: AppColors.ink,
+                      activeTrackColor: AppColors.tangerine,
+                      inactiveThumbColor: AppColors.textMid,
+                      inactiveTrackColor: AppColors.inkSoft,
+                      onChanged: _toggleDemoSkip,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 28),
               Text('LEGAL', style: AppTheme.display(15, color: AppColors.cyan)),

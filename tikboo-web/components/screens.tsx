@@ -11,7 +11,15 @@ export function Home({
 }: { onFile: (f: File) => void; onOpenHistory: () => void; onOpenSettings: () => void; busy: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [credits, setCredits] = useState(0);
+  const [showHow, setShowHow] = useState(false);
   useEffect(() => { setCredits(Credits.get()); }, []);
+
+  const openWhatsApp = () => {
+    const ua = navigator.userAgent || "";
+    const isMobile = /iphone|ipad|ipod|android/i.test(ua);
+    // Mobile → the app; desktop → WhatsApp Web.
+    window.open(isMobile ? "whatsapp://" : "https://web.whatsapp.com", "_blank");
+  };
   return (
     <Screen colors={["violet", "pink", "lime"]}>
       <div className="flex items-center justify-between">
@@ -45,13 +53,85 @@ export function Home({
       <input ref={input} type="file" accept=".txt,.zip,text/plain" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.currentTarget.value = ""; }} />
       <ChunkyButton label={busy ? "READING…" : "UPLOAD CHAT"} loading={busy} onClick={() => input.current?.click()} />
-      <div className="mt-3 text-center"><Body size={12} color="#6C6C7E">🔒 analyzed securely · never stored or sold</Body></div>
+      <button onClick={openWhatsApp}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-[22px] border border-stroke bg-inkCard py-4 active:scale-[0.99]">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#CBFF4D"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 004.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0012.04 2zm5.8 14.18c-.24.68-1.42 1.31-1.95 1.36-.5.05-1.13.07-1.83-.11-.42-.13-.96-.31-1.66-.61-2.92-1.26-4.83-4.2-4.98-4.4-.14-.2-1.18-1.57-1.18-3 0-1.42.75-2.12 1.01-2.41.27-.29.58-.36.78-.36l.56.01c.18.01.42-.07.66.5.24.59.82 2.03.89 2.18.07.14.12.31.02.5-.09.2-.14.31-.28.48-.14.17-.3.38-.42.5-.14.14-.29.29-.12.57.17.29.74 1.22 1.59 1.98 1.1.98 2.02 1.28 2.31 1.42.29.14.46.12.63-.07.17-.2.72-.84.91-1.13.19-.29.39-.24.66-.14.27.1 1.7.8 1.99.95.29.14.48.22.55.34.07.12.07.69-.17 1.37z"/></svg>
+        <Body size={15} weight={800} color="#F5F5F7">Open WhatsApp</Body>
+      </button>
+      <button onClick={() => setShowHow(true)} className="mt-3 text-center">
+        <Body size={14} weight={700} color="#AFAFC0">📖 How do I export a chat?</Body>
+      </button>
+      <div className="mt-2 text-center"><Body size={12} color="#6C6C7E">🔒 analyzed securely · never stored or sold</Body></div>
       <div className="mt-2 flex items-center justify-center gap-3">
         <a href="/privacy"><Body size={11} color="#6C6C7E">Privacy</Body></a>
         <Body size={11} color="#6C6C7E">·</Body>
         <a href="/terms"><Body size={11} color="#6C6C7E">Terms</Body></a>
       </div>
+      {showHow && <HowToModal onClose={() => setShowHow(false)} />}
     </Screen>
+  );
+}
+
+function HowToModal({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<"iphone" | "android">("iphone");
+  const iphone = [
+    "Open WhatsApp and go to the chat you want analyzed (a person or a group).",
+    "Tap the contact or group name at the very top to open its info page.",
+    "Scroll all the way down and tap “Export Chat”.",
+    "When asked, choose “Without Media” (it’s faster and all we need).",
+    "In the share sheet, tap “Save to Files”, pick a place (e.g. “On My iPhone”), and tap Save.",
+    "Come back here, tap “UPLOAD CHAT”, open Files, and pick the chat you just saved (a .txt or .zip).",
+  ];
+  const android = [
+    "Open WhatsApp and go to the chat you want analyzed.",
+    "Tap the ⋮ menu (three dots, top-right).",
+    "Tap “More”, then “Export chat”.",
+    "Choose “Without Media” when asked.",
+    "Choose “Save to Files” / “Files” (or save to Downloads).",
+    "Come back here, tap “UPLOAD CHAT”, and pick the chat file you saved (a .txt or .zip).",
+  ];
+  const steps = tab === "iphone" ? iphone : android;
+  return (
+    <motion.div className="absolute inset-0 z-40 overflow-y-auto bg-ink"
+      initial={{ y: "100%" }} animate={{ y: 0 }} transition={{ type: "spring", damping: 28 }}>
+      <div className="mx-auto flex min-h-full w-full max-w-[480px] flex-col px-6 pb-8 pt-4">
+        <button onClick={onClose} className="self-end p-2 text-textMid text-lg">✕</button>
+        <Display size={30}>HOW TO USE</Display>
+        <div className="mt-1"><Body size={14}>Export your chat from WhatsApp, then upload it here. Takes ~20 seconds.</Body></div>
+
+        <div className="mt-5 flex gap-2 rounded-2xl bg-inkCard p-1">
+          {(["iphone", "android"] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className="flex-1 rounded-xl py-2.5"
+              style={tab === t ? { background: ACCENT_HEX.lime } : {}}>
+              <Display size={14} color={tab === t ? "#0B0B0F" : "#AFAFC0"}>
+                {t === "iphone" ? "iPhone" : "Android"}
+              </Display>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-5 flex-1 space-y-3">
+          {steps.map((s, i) => (
+            <div key={i} className="flex gap-3.5">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl"
+                style={{ background: ACCENT_HEX[["pink","violet","cyan","lime","tangerine","pink"][i]] }}>
+                <Display size={14} color="#0B0B0F">{i + 1}</Display>
+              </span>
+              <div className="pt-0.5"><Body size={15} color="#F5F5F7">{s}</Body></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-stroke bg-inkCard p-4">
+          <Body size={13}>💡 Tip: “Without Media” keeps it quick. We only read the messages to build your report — nothing is stored or shared.</Body>
+        </div>
+
+        <div className="mt-5">
+          <ChunkyButton label="GOT IT" onClick={onClose} />
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 class PurchaseService {
   PurchaseService._();
   static final instance = PurchaseService._();
-
   static const String _appleKey = 'appl_wnfRwVctWkwVWPeIkJQQaopGOJe';
   // TODO(android): replace with your RevenueCat Google Play key (goog_...).
   static const String _googleKey = 'GOOGLE_PLAY_SDK_KEY';
@@ -23,6 +22,24 @@ class PurchaseService {
       Platform.isAndroid ? _googleKey : _appleKey;
 
   static const _kProLocal = 'tikboo_pro_unlocked';
+  static const _kDemoSkip = 'tikboo_demo_skip_paywall';
+
+  /// DEMO toggle (Settings): when on, the paywall is skipped (reports unlock
+  /// free) for easy screen recordings. Remove this before the final release.
+  Future<bool> demoSkipEnabled() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_kDemoSkip) ?? false;
+  }
+
+  Future<void> setDemoSkip(bool v) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDemoSkip, v);
+  }
+
+  /// DEMO ONLY: when built with --dart-define=FREE_UNLOCK=true, tapping a plan
+  /// unlocks the report without a real purchase (for App Review screen recording).
+  /// Defaults to false, so a normal build / Xcode Archive keeps the real paywall.
+  static const bool freeUnlock = bool.fromEnvironment('FREE_UNLOCK');
 
   /// Short reassurance shown under unlock CTAs.
   static const String trialHint = 'Cancel anytime in the store';
@@ -78,6 +95,12 @@ class PurchaseService {
 
   /// Single-entitlement app → any active entitlement means Pro.
   Future<bool> isPro() async {
+    // DEMO: Settings toggle skips the paywall.
+    if (await demoSkipEnabled()) return true;
+    if (freeUnlock) {
+      final p = await SharedPreferences.getInstance();
+      return p.getBool(_kProLocal) ?? false;
+    }
     if (_rcReady) {
       try {
         final info = await Purchases.getCustomerInfo();
@@ -161,6 +184,11 @@ class PurchaseService {
 
   /// Returns true on success (entitlement active).
   Future<bool> purchase(ProPlan plan) async {
+    if (freeUnlock) {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool(_kProLocal, true);
+      return true;
+    }
     if (_rcReady && plan.package != null) {
       try {
         // ignore: deprecated_member_use

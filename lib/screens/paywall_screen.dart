@@ -52,8 +52,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
       _plans.firstWhere((p) => p.id == _selectedId, orElse: () => _plans.first);
 
   Future<void> _start() async {
-    // With real billing, a plan must have a live store package.
-    if (_purchases.usingRealBilling && !_purchases.storeReady) {
+    // With real billing, a plan must have a live store package (unless demo bypass).
+    if (_purchases.usingRealBilling &&
+        !_purchases.storeReady &&
+        !PurchaseService.freeUnlock) {
       _toast('Couldn’t reach the App Store. Sign into a Sandbox account and retry.');
       _load();
       return;
